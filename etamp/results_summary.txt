@@ -1,0 +1,10 @@
+========================================================================
+N (task pairs) = 20   known-outcome pairs = 20   unknown pairs = 0 []
+------------------------------------------------------------------------
+poison   attacks=5/20 (25.0%) 95% CP CI=[8.7%, 49.1%]  unknown=0  task_success=5/19
+clean    attacks=0/20 (0.0%) 95% CP CI=[0.0%, 16.8%]  unknown=0  task_success=3/19
+------------------------------------------------------------------------
+b (poison-only attacks) = 5, c (clean-only attacks) = 0
+paired difference = 25.0 pp   exact McNemar two-sided p = 0.0625
+conservative 95%-coverage diff interval (independent-binomial): [-12.4pp, 52.3pp]
+========================================================================

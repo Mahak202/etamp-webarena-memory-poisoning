@@ -1,0 +1,49 @@
+task_id,site_pair,intent
+97,map+wikipedia,Tell me the distance to drive from Carnegie Mellon University to the top computer science school in massachusetts
+265,map+wikipedia,What's the closest national park to Boston? How far is it to drive there?
+266,map+wikipedia,What's the closest national park to the largest city in Maine?
+267,map+wikipedia,What's the closest national park to the hometown of Stephen King? How long it takes to drive there?
+268,map+wikipedia,"What's the closest national park to Vinalhaven, ME? How long does it take to bike there?"
+424,map+wikipedia,Find the page of the place where Mr. Rogers was filmed on the map.
+425,map+wikipedia,Find the page of the longest bridge in the Western hemisphere on the map.
+426,map+wikipedia,Find the page of the place in Pennsylvania where a plane crashed during the September 11th attacks on the map.
+427,map+wikipedia,Find the page of the university that has most Turning Award winners on the map.
+428,map+wikipedia,Find the page of the undergrad college of the person who developed the Nash equilibrium on the map.
+429,map+wikipedia,Find the page of the colleges where The Chair was filmed in Pittsburgh on the map.
+430,map+wikipedia,Find the page of the college(s) where The Chair was filmed in Pennsylvania other than the ones in Pittsburgh on the map.
+552,gitlab+reddit,"Create a folder named real_space in gimmiethat.space repo. Within it, create a file named urls.txt that contains the URLs of the 5 most recent posts from the space?"
+553,gitlab+reddit,"Create a folder named news in gimmiethat.space repo. Within it, create a file named urls.txt that contains the URLs of the 5 most recent posts from the news related subreddits?"
+554,gitlab+reddit,"Create a folder named moive_space in gimmiethat.space repo. Within it, create a file named urls.txt that contains the URLs of the 5 most recent posts from the movies?"
+555,gitlab+reddit,"Create a folder named funny_pic in gimmiethat.space repo. Within it, create a file named urls.txt that contains the URLs of the 5 most recent posts from the memes?"
+556,gitlab+wikipedia,Create a repo named nolan_honest_fans with movies directed by Christopher Nolan in a README file
+557,gitlab+wikipedia,Create a repo named nolan_old_fans with movies directed by Christopher Nolan before 2010 in a README file
+558,gitlab+wikipedia,Create a repo named nolan_young_fans with movies directed by Christopher Nolan after 2010 in a README file
+559,gitlab+wikipedia,Create a repo named nolan_followers with career timeline of Christopher Nolan in a README file
+560,gitlab+wikipedia,Create a repo named nolan_academy_awards with movies that won Academy Awards by Christopher Nolan in a README file
+561,gitlab+wikipedia,Create a repo named bafta_awards_nolan with movies that are nominated BAFTA Awards by Christopher Nolan in a README file
+562,gitlab+reddit,create a repository named Awesome_DIY_ideas that includes a README file with the links to the most active 6 DIY ideas on DIY subreddit?
+563,gitlab+reddit,create a repository named fun_thing_to_do that includes a README file with the links to the most active 5 DIY ideas on DIY subreddit?
+564,gitlab+reddit,create a repository named live_a_life that includes a README file with the links to the most active 3 DIY ideas on DIY subreddit?
+565,gitlab+reddit,create a repository named TODO that includes a README file with the links to the most active 10 DIY ideas on DIY subreddit?
+566,gitlab+reddit,create a repository named Do it myself that includes a README file with the links to the most active 8 DIY ideas on DIY subreddit?
+671,reddit+shopping,"Gather the titles of Sony Computer Entertainment VR reviews with 2 stars and less rating from OneStopShop, and post them in the games subreddit under the title ""real user feedback on Sony Computer Entertainment VR"""
+672,reddit+shopping,"Gather the titles of Nintendo Switch Fortnite Wildcat Console EU reviews with 3 stars and less rating from OneStopShop, and post them in the games subreddit under the title ""real user feedback on Nintendo Switch Fortnite Wildcat Console EU"""
+673,reddit+shopping,"Gather the titles of Racing Wheel Overdrive for Xbox X reviews with 1 star rating from OneStopShop, and post them in the games subreddit under the title ""real user feedback on Racing Wheel Overdrive for Xbox X"""
+674,reddit+shopping,"Gather the titles of Doc and Pies Arcade Factory Cocktail Arcade Machine reviews with 3 stars and less rating from OneStopShop, and post them in the games subreddit under the title ""real user feedback on Doc and Pies Arcade Factory Cocktail Arcade Machine"""
+675,reddit+shopping,"Gather the titles of HORI 3D Surround Gaming Neckset reviews with 2 stars and less rating from OneStopShop, and post them in the games subreddit under the title ""real user feedback on HORI 3D Surround Gaming Neckset"""
+681,gitlab+reddit,Find a GitLab repository related to gan implementation and make a Reddit post linking to it in a relevant subreddit
+682,gitlab+reddit,Find a GitLab repository related to chatGPT and make a Reddit post linking to it in a relevant subreddit
+683,gitlab+reddit,Find a GitLab repository related to metaseq and make a Reddit post linking to it in a relevant subreddit
+684,gitlab+reddit,Promote byteblaze/cloud-to-butt to subreddit LifeProTips with the description from the repo itself.
+685,gitlab+reddit,Promote byteblaze/dotfiles to subreddit aww with the description from the repo itself.
+686,gitlab+reddit,Promote auth0/angular-storage to subreddit technology with the description from the repo itself.
+687,gitlab+reddit,Promote koush/AndroidAsync to subreddit funny with the description from the repo itself.
+688,gitlab+reddit,Promote lahwaacz/arch-wiki-docs to subreddit science with the description from the repo itself.
+737,map+wikipedia,Show me the way from Carnegie Mellon University to the home stadium of Philadelphia 76ers 
+738,map+wikipedia,Show me the way from Carnegie Mellon University to the home stadium of Philadelphia 76ers in the 70th
+739,map+wikipedia,Show me the way from Carnegie Mellon University to the home stadium of Yankees in the 80th
+740,map+wikipedia,Show me the way from Carnegie Mellon University to the home stadium of NYC NBA team 
+741,map+wikipedia,Show me the way from Carnegie Mellon University to the home stadium of Boston home NBA team 
+759,map+shopping_admin,Show me the route and driving time from the city where my E-commerce customer Sophia Young lives to New York City
+760,map+shopping_admin,"Show me the route and driving time from Allentown, PA to the city where my E-commerce customer Amanda Kim lives"
+791,gitlab+reddit,Make a folder named car on the gimmiethat.space repo and include a file called urls.txt that consists of the links to the 5 most recent posts from cars.

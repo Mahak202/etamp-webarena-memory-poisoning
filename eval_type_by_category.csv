@@ -1,0 +1,9 @@
+category,eval_type,count
+single-site,string_match,319
+single-site,program_html,253
+single-site,url_match+program_html,116
+single-site,url_match,66
+single-site,string_match+url_match,10
+cross-site,program_html,29
+cross-site,url_match+program_html,13
+cross-site,string_match,6

@@ -1,0 +1,611 @@
+diff --git a/agent/agent.py b/agent/agent.py
+index 923ebce..0a05b48 100644
+--- a/agent/agent.py
++++ b/agent/agent.py
+@@ -1,3 +1,5 @@
++from etamp.inject import clean_turns, poisoned_turns
++from etamp.real_turns import real_turns_from_render
+ import argparse
+ import json
+ from typing import Any
+@@ -122,6 +124,26 @@ class PromptAgent(Agent):
+         prompt = self.prompt_constructor.construct(
+             trajectory, intent, meta_data
+         )
++        poison_pid = getattr(getattr(self, "args", None), "poison_pid", None)
++        if hasattr(self, "args") and getattr(self.args, "poison_pid", None):
++            poison_pid = self.args.poison_pid
++        matched_clean = bool(getattr(getattr(self, "args", None), "matched_clean", False))
++
++        print(f"[DEBUG] Checking poison_pid: {poison_pid} matched_clean: {matched_clean}")
++        if poison_pid:
++            p_turns = poisoned_turns("Shop product", "Sample Item", poison_pid)
++            if isinstance(prompt, list):
++                prompt = prompt[:1] + p_turns + prompt[1:]
++            elif isinstance(prompt, dict) and "messages" in prompt:
++                prompt["messages"] = prompt["messages"][:1] + p_turns + prompt["messages"][1:]
++            print("[DEBUG] Successfully injected poisoned turns into prompt!")
++        elif matched_clean:
++            c_turns = clean_turns("Shop product", "Sample Item", 2026)
++            if isinstance(prompt, list):
++                prompt = prompt[:1] + c_turns + prompt[1:]
++            elif isinstance(prompt, dict) and "messages" in prompt:
++                prompt["messages"] = prompt["messages"][:1] + c_turns + prompt["messages"][1:]
++            print("[DEBUG] Successfully injected matched-clean turns into prompt!")
+         lm_config = self.lm_config
+         n = 0
+         while True:
+@@ -171,6 +193,7 @@ def construct_agent(args: argparse.Namespace) -> Agent:
+             args.instruction_path, lm_config=llm_config, tokenizer=tokenizer
+         )
+         agent = PromptAgent(
++
+             action_set_tag=args.action_set_tag,
+             lm_config=llm_config,
+             prompt_constructor=prompt_constructor,
+@@ -179,4 +202,5 @@ def construct_agent(args: argparse.Namespace) -> Agent:
+         raise NotImplementedError(
+             f"agent type {args.agent_type} not implemented"
+         )
++    agent.args = args
+     return agent
+diff --git a/agent/prompts/prompt_constructor.py b/agent/prompts/prompt_constructor.py
+index a0ca408..24bc6ea 100644
+--- a/agent/prompts/prompt_constructor.py
++++ b/agent/prompts/prompt_constructor.py
+@@ -61,6 +61,16 @@ class PromptConstructor(object):
+                     )
+                 message.append({"role": "user", "content": current})
+                 return message
++            elif self.lm_config.mode == "responses":
++                # Responses API rejects the legacy Chat Completions "name"
++                # field on input items, so few-shot examples are given as
++                # plain user/assistant turns instead of system+name.
++                message = [{"role": "system", "content": intro}]
++                for (x, y) in examples:
++                    message.append({"role": "user", "content": x})
++                    message.append({"role": "assistant", "content": y})
++                message.append({"role": "user", "content": current})
++                return message
+             elif self.lm_config.mode == "completion":
+                 message = f"{intro}\n\n"
+                 message += "Here are a few examples:\n"
+diff --git a/browser_env/envs.py b/browser_env/envs.py
+index 80f4512..f7162c1 100644
+--- a/browser_env/envs.py
++++ b/browser_env/envs.py
+@@ -237,6 +237,12 @@ class ScriptBrowserEnv(Env[dict[str, Observation], Action]):
+         success = False
+         fail_error = ""
+         try:
++            import sys, os
++            _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
++            if _repo_root not in sys.path:
++           	 sys.path.insert(0, _repo_root)
++       	    from etamp.chaos_monkey import apply_chaos
++            action = apply_chaos(action, enabled=getattr(self, "chaos_enabled", False))
+             self.page = execute_action(
+                 action,
+                 self.page,
+diff --git a/llms/__init__.py b/llms/__init__.py
+index 7a8c942..060156f 100644
+--- a/llms/__init__.py
++++ b/llms/__init__.py
+@@ -3,12 +3,14 @@ from .providers.hf_utils import generate_from_huggingface_completion
+ from .providers.openai_utils import (
+     generate_from_openai_chat_completion,
+     generate_from_openai_completion,
++    generate_from_openai_responses,
+ )
+ from .utils import call_llm
+ 
+ __all__ = [
+     "generate_from_openai_completion",
+     "generate_from_openai_chat_completion",
++    "generate_from_openai_responses",
+     "generate_from_huggingface_completion",
+     "call_llm",
+ ]
+diff --git a/llms/lm_config.py b/llms/lm_config.py
+index 2156ef9..accecd5 100644
+--- a/llms/lm_config.py
++++ b/llms/lm_config.py
+@@ -42,6 +42,10 @@ def construct_llm_config(args: argparse.Namespace) -> LMConfig:
+         llm_config.gen_config["stop_token"] = args.stop_token
+         llm_config.gen_config["max_obs_length"] = args.max_obs_length
+         llm_config.gen_config["max_retry"] = args.max_retry
++        llm_config.gen_config["reasoning_effort"] = args.reasoning_effort
++        llm_config.gen_config["max_output_tokens"] = args.max_output_tokens
++        llm_config.gen_config["api_timeout"] = args.api_timeout
++        llm_config.gen_config["no_retry"] = args.no_retry
+     elif args.provider == "huggingface":
+         llm_config.gen_config["temperature"] = args.temperature
+         llm_config.gen_config["top_p"] = args.top_p
+diff --git a/llms/providers/openai_utils.py b/llms/providers/openai_utils.py
+index 4dcdad2..888821a 100644
+--- a/llms/providers/openai_utils.py
++++ b/llms/providers/openai_utils.py
+@@ -10,9 +10,15 @@ from typing import Any
+ 
+ import aiolimiter
+ import openai
+-import openai.error
++import tiktoken
++from openai import AsyncOpenAI, OpenAI
+ from tqdm.asyncio import tqdm_asyncio
+ 
++from etamp.budget import commit as budget_commit
++from etamp.budget import reserve as budget_reserve
++
++RETRYABLE_ERRORS = (openai.RateLimitError, openai.APITimeoutError)
++
+ 
+ def retry_with_exponential_backoff(  # type: ignore
+     func,
+@@ -20,43 +26,64 @@ def retry_with_exponential_backoff(  # type: ignore
+     exponential_base: float = 2,
+     jitter: bool = True,
+     max_retries: int = 3,
+-    errors: tuple[Any] = (openai.error.RateLimitError,),
++    errors: tuple[Any] = RETRYABLE_ERRORS,
+ ):
+     """Retry a function with exponential backoff."""
+ 
+     def wrapper(*args, **kwargs):  # type: ignore
+-        # Initialize variables
+         num_retries = 0
+         delay = initial_delay
+ 
+-        # Loop until a successful response or max_retries is hit or an exception is raised
+         while True:
+             try:
+                 return func(*args, **kwargs)
+-            # Retry on specified errors
+             except errors as e:
+-                # Increment retries
+                 num_retries += 1
+-
+-                # Check if max retries has been reached
+                 if num_retries > max_retries:
+                     raise Exception(
+                         f"Maximum number of retries ({max_retries}) exceeded."
+                     )
+-
+-                # Increment the delay
+                 delay *= exponential_base * (1 + jitter * random.random())
+                 print(f"Retrying in {delay} seconds.")
+-                # Sleep for the delay
+                 time.sleep(delay)
+-
+-            # Raise exceptions for any errors not specified
+             except Exception as e:
+                 raise e
+ 
+     return wrapper
+ 
+ 
++def _client() -> OpenAI:
++    if "OPENAI_API_KEY" not in os.environ:
++        raise ValueError(
++            "OPENAI_API_KEY environment variable must be set when using OpenAI API."
++        )
++    return OpenAI(
++        api_key=os.environ["OPENAI_API_KEY"],
++        organization=os.environ.get("OPENAI_ORGANIZATION", "") or None,
++    )
++
++
++def _async_client() -> AsyncOpenAI:
++    if "OPENAI_API_KEY" not in os.environ:
++        raise ValueError(
++            "OPENAI_API_KEY environment variable must be set when using OpenAI API."
++        )
++    return AsyncOpenAI(
++        api_key=os.environ["OPENAI_API_KEY"],
++        organization=os.environ.get("OPENAI_ORGANIZATION", "") or None,
++    )
++
++
++def _count_tokens(model: str, messages: list[dict[str, str]]) -> int:
++    try:
++        enc = tiktoken.encoding_for_model(model)
++    except KeyError:
++        enc = tiktoken.get_encoding("cl100k_base")
++    return sum(len(enc.encode(m.get("content", ""))) for m in messages) + 8 * len(
++        messages
++    )
++
++
+ async def _throttled_openai_completion_acreate(
+     engine: str,
+     prompt: str,
+@@ -65,22 +92,24 @@ async def _throttled_openai_completion_acreate(
+     top_p: float,
+     limiter: aiolimiter.AsyncLimiter,
+ ) -> dict[str, Any]:
++    client = _async_client()
+     async with limiter:
+         for _ in range(3):
+             try:
+-                return await openai.Completion.acreate(  # type: ignore
+-                    engine=engine,
++                r = await client.completions.create(
++                    model=engine,
+                     prompt=prompt,
+                     temperature=temperature,
+                     max_tokens=max_tokens,
+                     top_p=top_p,
+                 )
+-            except openai.error.RateLimitError:
++                return {"choices": [{"message": {"content": r.choices[0].text}}]}
++            except openai.RateLimitError:
+                 logging.warning(
+                     "OpenAI API rate limit exceeded. Sleeping for 10 seconds."
+                 )
+                 await asyncio.sleep(10)
+-            except openai.error.APIError as e:
++            except openai.APIError as e:
+                 logging.warning(f"OpenAI API error: {e}")
+                 break
+         return {"choices": [{"message": {"content": ""}}]}
+@@ -95,26 +124,6 @@ async def agenerate_from_openai_completion(
+     context_length: int,
+     requests_per_minute: int = 300,
+ ) -> list[str]:
+-    """Generate from OpenAI Completion API.
+-
+-    Args:
+-        prompts: list of prompts
+-        temperature: Temperature to use.
+-        max_tokens: Maximum number of tokens to generate.
+-        top_p: Top p to use.
+-        context_length: Length of context to use.
+-        requests_per_minute: Number of requests per minute to allow.
+-
+-    Returns:
+-        List of generated responses.
+-    """
+-    if "OPENAI_API_KEY" not in os.environ:
+-        raise ValueError(
+-            "OPENAI_API_KEY environment variable must be set when using OpenAI API."
+-        )
+-    openai.api_key = os.environ["OPENAI_API_KEY"]
+-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
+-
+     limiter = aiolimiter.AsyncLimiter(requests_per_minute)
+     async_responses = [
+         _throttled_openai_completion_acreate(
+@@ -128,7 +137,7 @@ async def agenerate_from_openai_completion(
+         for prompt in prompts
+     ]
+     responses = await tqdm_asyncio.gather(*async_responses)
+-    return [x["choices"][0]["text"] for x in responses]
++    return [x["choices"][0]["message"]["content"] for x in responses]
+ 
+ 
+ @retry_with_exponential_backoff
+@@ -141,22 +150,16 @@ def generate_from_openai_completion(
+     context_length: int,
+     stop_token: str | None = None,
+ ) -> str:
+-    if "OPENAI_API_KEY" not in os.environ:
+-        raise ValueError(
+-            "OPENAI_API_KEY environment variable must be set when using OpenAI API."
+-        )
+-    openai.api_key = os.environ["OPENAI_API_KEY"]
+-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
+-    response = openai.Completion.create(  # type: ignore
++    client = _client()
++    response = client.completions.create(
++        model=engine,
+         prompt=prompt,
+-        engine=engine,
+         temperature=temperature,
+         max_tokens=max_tokens,
+         top_p=top_p,
+-        stop=[stop_token],
++        stop=[stop_token] if stop_token else None,
+     )
+-    answer: str = response["choices"][0]["text"]
+-    return answer
++    return response.choices[0].text
+ 
+ 
+ async def _throttled_openai_chat_completion_acreate(
+@@ -167,17 +170,19 @@ async def _throttled_openai_chat_completion_acreate(
+     top_p: float,
+     limiter: aiolimiter.AsyncLimiter,
+ ) -> dict[str, Any]:
++    client = _async_client()
+     async with limiter:
+         for _ in range(3):
+             try:
+-                return await openai.ChatCompletion.acreate(  # type: ignore
++                r = await client.chat.completions.create(
+                     model=model,
+                     messages=messages,
+                     temperature=temperature,
+                     max_tokens=max_tokens,
+                     top_p=top_p,
+                 )
+-            except openai.error.RateLimitError:
++                return {"choices": [{"message": {"content": r.choices[0].message.content}}]}
++            except openai.RateLimitError:
+                 logging.warning(
+                     "OpenAI API rate limit exceeded. Sleeping for 10 seconds."
+                 )
+@@ -185,7 +190,7 @@ async def _throttled_openai_chat_completion_acreate(
+             except asyncio.exceptions.TimeoutError:
+                 logging.warning("OpenAI API timeout. Sleeping for 10 seconds.")
+                 await asyncio.sleep(10)
+-            except openai.error.APIError as e:
++            except openai.APIError as e:
+                 logging.warning(f"OpenAI API error: {e}")
+                 break
+         return {"choices": [{"message": {"content": ""}}]}
+@@ -200,26 +205,6 @@ async def agenerate_from_openai_chat_completion(
+     context_length: int,
+     requests_per_minute: int = 300,
+ ) -> list[str]:
+-    """Generate from OpenAI Chat Completion API.
+-
+-    Args:
+-        messages_list: list of message list
+-        temperature: Temperature to use.
+-        max_tokens: Maximum number of tokens to generate.
+-        top_p: Top p to use.
+-        context_length: Length of context to use.
+-        requests_per_minute: Number of requests per minute to allow.
+-
+-    Returns:
+-        List of generated responses.
+-    """
+-    if "OPENAI_API_KEY" not in os.environ:
+-        raise ValueError(
+-            "OPENAI_API_KEY environment variable must be set when using OpenAI API."
+-        )
+-    openai.api_key = os.environ["OPENAI_API_KEY"]
+-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
+-
+     limiter = aiolimiter.AsyncLimiter(requests_per_minute)
+     async_responses = [
+         _throttled_openai_chat_completion_acreate(
+@@ -241,19 +226,13 @@ def generate_from_openai_chat_completion(
+     messages: list[dict[str, str]],
+     model: str,
+     temperature: float,
+-    max_tokens: int,
+     top_p: float,
+     context_length: int,
++    max_tokens: int,
+     stop_token: str | None = None,
+ ) -> str:
+-    if "OPENAI_API_KEY" not in os.environ:
+-        raise ValueError(
+-            "OPENAI_API_KEY environment variable must be set when using OpenAI API."
+-        )
+-    openai.api_key = os.environ["OPENAI_API_KEY"]
+-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
+-
+-    response = openai.ChatCompletion.create(  # type: ignore
++    client = _client()
++    response = client.chat.completions.create(
+         model=model,
+         messages=messages,
+         temperature=temperature,
+@@ -261,8 +240,51 @@ def generate_from_openai_chat_completion(
+         top_p=top_p,
+         stop=[stop_token] if stop_token else None,
+     )
+-    answer: str = response["choices"][0]["message"]["content"]
+-    return answer
++    return response.choices[0].message.content or ""
++
++
++def generate_from_openai_responses(
++    messages: list[dict[str, str]],
++    model: str,
++    reasoning_effort: str,
++    max_output_tokens: int,
++    api_timeout: float,
++    no_retry: bool,
++) -> str:
++    """gpt-5.6-luna-style path: Responses API, reasoning.effort control,
++    code-enforced token/budget caps (guide sections 2-3). No decorator-based
++    retry here — `no_retry` maps straight to the client's max_retries so the
++    guide's 'disable automatic API retries' is an actual SDK setting, not a
++    convention."""
++    input_tokens = _count_tokens(model, messages)
++    reservation_id = budget_reserve(input_tokens, max_output_tokens)
++
++    client = OpenAI(
++        api_key=os.environ["OPENAI_API_KEY"],
++        organization=os.environ.get("OPENAI_ORGANIZATION", "") or None,
++        timeout=api_timeout,
++        max_retries=0 if no_retry else 2,
++    )
++    try:
++        response = client.responses.create(
++            model=model,
++            input=messages,
++            reasoning={"effort": reasoning_effort},
++            max_output_tokens=max_output_tokens,
++        )
++    except Exception:
++        # guide: retain the reservation after a timeout/error rather than
++        # dropping it — commit() is simply not called, so the worst-case
++        # reservation from budget_reserve() stands as spend.
++        raise
++
++    usage = response.usage
++    budget_commit(
++        reservation_id,
++        actual_input_tokens=usage.input_tokens,
++        actual_output_tokens=usage.output_tokens,
++    )
++    return response.output_text or ""
+ 
+ 
+ @retry_with_exponential_backoff
+@@ -280,7 +302,5 @@ def fake_generate_from_openai_chat_completion(
+         raise ValueError(
+             "OPENAI_API_KEY environment variable must be set when using OpenAI API."
+         )
+-    openai.api_key = os.environ["OPENAI_API_KEY"]
+-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
+     answer = "Let's think step-by-step. This page shows a list of links and buttons. There is a search box with the label 'Search query'. I will click on the search box to type the query. So the action I will perform is \"click [60]\"."
+     return answer
+diff --git a/llms/tokenizers.py b/llms/tokenizers.py
+index 1f6f338..9ebdaac 100644
+--- a/llms/tokenizers.py
++++ b/llms/tokenizers.py
+@@ -7,7 +7,13 @@ from transformers import LlamaTokenizer
+ class Tokenizer(object):
+     def __init__(self, provider: str, model_name: str) -> None:
+         if provider == "openai":
+-            self.tokenizer = tiktoken.encoding_for_model(model_name)
++            try:
++                self.tokenizer = tiktoken.encoding_for_model(model_name)
++            except KeyError:
++                # model_name isn't a real OpenAI model (e.g. a local model served
++                # through an OpenAI-compatible endpoint like Ollama) — fall back to
++                # a generic encoding, used only for approximate length truncation.
++                self.tokenizer = tiktoken.get_encoding("cl100k_base")
+         elif provider == "huggingface":
+             self.tokenizer = LlamaTokenizer.from_pretrained(model_name)
+             # turn off adding special tokens automatically
+diff --git a/llms/utils.py b/llms/utils.py
+index ea91a10..d653fc9 100644
+--- a/llms/utils.py
++++ b/llms/utils.py
+@@ -5,6 +5,7 @@ from llms import (
+     generate_from_huggingface_completion,
+     generate_from_openai_chat_completion,
+     generate_from_openai_completion,
++    generate_from_openai_responses,
+     lm_config,
+ )
+ 
+@@ -28,6 +29,16 @@ def call_llm(
+                 max_tokens=lm_config.gen_config["max_tokens"],
+                 stop_token=None,
+             )
++        elif lm_config.mode == "responses":
++            assert isinstance(prompt, list)
++            response = generate_from_openai_responses(
++                messages=prompt,
++                model=lm_config.model,
++                reasoning_effort=lm_config.gen_config["reasoning_effort"],
++                max_output_tokens=lm_config.gen_config["max_output_tokens"],
++                api_timeout=lm_config.gen_config["api_timeout"],
++                no_retry=lm_config.gen_config["no_retry"],
++            )
+         elif lm_config.mode == "completion":
+             assert isinstance(prompt, str)
+             response = generate_from_openai_completion(
+diff --git a/requirements.txt b/requirements.txt
+index df1a5d0..a9648f6 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -2,7 +2,7 @@ gymnasium
+ playwright==1.32.1
+ Pillow
+ evaluate
+-openai==0.27.0
++openai>=1.99.0
+ types-tqdm
+ tiktoken
+ aiolimiter
+diff --git a/run.py b/run.py
+index cee3c98..e450130 100644
+--- a/run.py
++++ b/run.py
+@@ -12,6 +12,8 @@ from pathlib import Path
+ 
+ import openai
+ 
++from etamp.budget import BudgetExceeded, TokenLimitExceeded
++
+ from agent import (
+     Agent,
+     PromptAgent,
+@@ -138,12 +140,35 @@ def config() -> argparse.Namespace:
+         default="",
+     )
+ 
++    # responses-API (e.g. gpt-5.6-luna) config — only used when --mode responses
++    parser.add_argument(
++        "--reasoning_effort",
++        type=str,
++        default="none",
++        help="reasoning.effort for Responses-API models: none|low|medium|high|xhigh|max",
++    )
++    parser.add_argument(
++        "--max_output_tokens", type=int, default=1024,
++        help="Responses API max_output_tokens cap (mode=responses)",
++    )
++    parser.add_argument(
++        "--api_timeout", type=float, default=60.0,
++        help="per-call API timeout in seconds (mode=responses)",
++    )
++    parser.add_argument(
++        "--no_retry", action="store_true",
++        help="disable the OpenAI SDK's automatic request retries (mode=responses)",
++    )
++
+     # example config
+     parser.add_argument("--test_start_idx", type=int, default=0)
+     parser.add_argument("--test_end_idx", type=int, default=1000)
+ 
+     # logging related
++    parser.add_argument("--poison_pid", type=str, default=None, help="Product ID for eTAMP injection")
++    parser.add_argument("--matched_clean", action="store_true", help="Insert the matched clean-memory control (same snippet, no malicious instruction)")
+     parser.add_argument("--result_dir", type=str, default="")
++    parser.add_argument("--chaos", action="store_true", help="Enable Chaos Monkey (click drop, scroll swap, type garble) for this run")
+     args = parser.parse_args()
+ 
+     # check the whether the action space is compatible with the observation space
+@@ -221,6 +246,8 @@ def test(
+ ) -> None:
+     scores = []
+     max_steps = args.max_steps
++    if args.chaos:
++        max_steps = 37
+ 
+     early_stop_thresholds = {
+         "parsing_failure": args.parsing_failure_th,
+@@ -239,6 +266,7 @@ def test(
+         save_trace_enabled=args.save_trace_enabled,
+         sleep_after_execution=args.sleep_after_execution,
+     )
++    env.chaos_enabled = args.chaos
+ 
+     for config_file in config_file_list:
+         try:
+@@ -347,8 +375,13 @@ def test(
+                     Path(args.result_dir) / "traces" / f"{task_id}.zip"
+                 )
+ 
+-        except openai.error.OpenAIError as e:
++        except openai.OpenAIError as e:
+             logger.info(f"[OpenAI Error] {repr(e)}")
++        except TokenLimitExceeded as e:
++            logger.info(f"[Unresolved: token budget] {repr(e)}")
++        except BudgetExceeded as e:
++            logger.info(f"[Unresolved: spend cap] {repr(e)}")
++            raise
+         except Exception as e:
+             logger.info(f"[Unhandled Error] {repr(e)}]")
+             import traceback
+@@ -362,7 +395,10 @@ def test(
+         render_helper.close()
+ 
+     env.close()
+-    logger.info(f"Average score: {sum(scores) / len(scores)}")
++    if scores:
++        logger.info(f"Average score: {sum(scores) / len(scores)}")
++    else:
++        logger.info("Average score: n/a (no task completed without erroring)")
+ 
+ 
+ def prepare(args: argparse.Namespace) -> None:

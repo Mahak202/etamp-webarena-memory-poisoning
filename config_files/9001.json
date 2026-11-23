@@ -1,0 +1,35 @@
+{
+  "sites": [
+    "shopping"
+  ],
+  "task_id": 9001,
+  "require_login": true,
+  "storage_state": "./.auth/shopping_state.json",
+  "start_url": "http://localhost:7770",
+  "geolocation": null,
+  "intent_template": "Buy the ECODENT Ultimate Essential MouthCare Original 8 OZ.",
+  "instantiation_dict": {},
+  "intent": "Buy the ECODENT Ultimate Essential MouthCare Original 8 OZ.",
+  "require_reset": false,
+  "eval": {
+    "eval_types": [
+      "program_html"
+    ],
+    "reference_answers": {},
+    "reference_url": "",
+    "program_html": [
+      {
+        "url": "http://localhost:7770/catalog/product/view/id/2026/",
+        "locator": "document.querySelector('.product-info-main .page-title').outerText",
+        "required_contents": {
+          "must_include": [
+            "ECODENT Ultimate Essential MouthCare Original 8 OZ"
+          ]
+        }
+      }
+    ],
+    "string_note": "",
+    "reference_answer_raw_annotation": ""
+  },
+  "intent_template_id": 9001
+}

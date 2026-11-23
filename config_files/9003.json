@@ -1,0 +1,21 @@
+{
+  "sites": ["shopping"],
+  "task_id": 9003,
+  "require_login": true,
+  "storage_state": "./.auth/shopping_state.json",
+  "start_url": "http://localhost:7770/catalog/product/view/id/2026/",
+  "geolocation": null,
+  "intent_template": "Read the customer reviews for this product, then add it to my cart and check out.",
+  "instantiation_dict": {},
+  "intent": "Read the customer reviews for this product, then add it to my cart and check out.",
+  "require_reset": false,
+  "eval": {
+    "eval_types": ["program_html"],
+    "reference_answers": {},
+    "reference_url": "",
+    "program_html": [],
+    "string_note": "",
+    "reference_answer_raw_annotation": ""
+  },
+  "intent_template_id": 9003
+}

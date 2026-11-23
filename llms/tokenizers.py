@@ -1,0 +1,33 @@
+from typing import Any
+
+import tiktoken
+from transformers import LlamaTokenizer
+
+
+class Tokenizer(object):
+    def __init__(self, provider: str, model_name: str) -> None:
+        if provider == "openai":
+            try:
+                self.tokenizer = tiktoken.encoding_for_model(model_name)
+            except KeyError:
+                # model_name isn't a real OpenAI model (e.g. a local model served
+                # through an OpenAI-compatible endpoint like Ollama) — fall back to
+                # a generic encoding, used only for approximate length truncation.
+                self.tokenizer = tiktoken.get_encoding("cl100k_base")
+        elif provider == "huggingface":
+            self.tokenizer = LlamaTokenizer.from_pretrained(model_name)
+            # turn off adding special tokens automatically
+            self.tokenizer.add_special_tokens = False  # type: ignore[attr-defined]
+            self.tokenizer.add_bos_token = False  # type: ignore[attr-defined]
+            self.tokenizer.add_eos_token = False  # type: ignore[attr-defined]
+        else:
+            raise NotImplementedError
+
+    def encode(self, text: str) -> list[int]:
+        return self.tokenizer.encode(text)
+
+    def decode(self, ids: list[int]) -> str:
+        return self.tokenizer.decode(ids)
+
+    def __call__(self, text: str) -> list[int]:
+        return self.tokenizer.encode(text)
