@@ -276,6 +276,8 @@ kept for transparency and explicitly excluded from all reported numbers.
 
 ## Results
 
+![ASR_B by payload condition, ordered low to high, with 95% CI](media/etamp_dashboard/asr_b_by_condition.png)
+
 **1. Payload framing is the dominant variable, and it splits into two clusters,
 not a smooth gradient.** The blunt override, its chaos-on variant, and
 reciprocity all land low (42–47%); fatigue, trust, fear, consensus, and
