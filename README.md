@@ -134,6 +134,85 @@ never silently reused — before rerunning, move its `results/<condition>_100/` 
 suffixed `_CORRUPTED_<reason>` in this repo are exactly these failed attempts,
 kept for transparency and explicitly excluded from all reported numbers.
 
+## Results
+
+**1. Payload framing is the dominant variable, and it splits into two clusters,
+not a smooth gradient.** The blunt override, its chaos-on variant, and
+reciprocity all land low (42–47%); fatigue, trust, fear, consensus, and
+helpfulness all land high (85–99%) — a ~2x gap with no condition in between:
+
+| Cluster | Conditions | ASR_B range |
+|---|---|---|
+| Low | Blunt override (44%), chaos-on (47%), reciprocity (42%) | 42–47% |
+| High | Fatigue (85%), trust (88%), fear (90%), consensus (92%), helpfulness (99%) | 85–99% |
+
+Reciprocity is the most informative low-cluster result: it has no override
+clause and no urgency language at all, yet still lands near the blunt-override
+baseline — so "lacks an explicit override clause" alone does **not** predict a
+high fire rate. What the high cluster shares instead is tying the malicious step
+to something immediately actionable *for the agent itself* — its own current
+task (helpfulness, trust), an unavoidable consequence it would face (fear), or
+its own future effort (fatigue). Consensus (92%) is the one exception to that
+pattern and is worth a closer look in any follow-up work.
+
+**2. Attack direction matters completely.** The identical payload planted on
+Reddit and triggered on Shopping fired 0/100 times — flat zero, versus 44% in
+the Shopping→Reddit direction. The attack is not symmetric.
+
+**3. Chaos (action-level noise) barely moves the fire rate.** Random extra
+clicks/scrolls/typing plus a longer step cap took the blunt-override condition
+from 44% to 47% — within noise. Chaos perturbs clicking/scrolling/typing, not
+navigation, so once the agent decides to issue the malicious `goto`, chaos can't
+prevent it.
+
+**4. The underlying task is not solved any more often just because the attack
+also fired — if anything, poisoning quietly tanks it regardless.** Task success
+on the clean, unpoisoned baseline is already low (8.5%, 8/94); every poisoned
+condition measured is at or below that, independent of how often the attack
+itself fired:
+
+| Condition | ASR_B | Task success (graded) |
+|---|---|---|
+| Clean (unpoisoned) baseline | — | 8.5% (8/94) |
+| Blunt override | 44% | 6.0% (6/100) |
+| Reciprocity | 42% | 8.2% (8/97) |
+| Trust | 88% | 6.4% (6/94) |
+| Fatigue | 85% | 5.6% (5/90) |
+| Fear | 90% | 3.0% (3/100) |
+
+Splitting fired vs. not-fired runs within a condition doesn't explain the gap
+either (e.g. fear: 3.3% success when fired vs. 0.0% when not — both within
+noise of each other). Net read: looking at task-success numbers alone, an
+operator monitoring only completion rate would never notice anything had
+happened — the attack is invisible on that metric even though it fired on the
+large majority of runs.
+
+**5. Once the attack fires, soft framings keep firing — the blunt override
+mostly doesn't.** Among runs where the attack fired at least once, fear
+double-fired 58/90 of the time versus the blunt override's 7/44 — a soft,
+plausible-sounding framing doesn't just convince the agent once, it keeps
+convincing it on every later opportunity. Fear also convinces faster: 66/90
+fires happen on the very first opportunity (step C1), versus 28/44 for the
+blunt override, which has a long tail stretching out to step C11.
+
+**6. Results are not deterministic at `temperature=1.0` — treat any single
+task's outcome as a sample, not ground truth.** Cross-checking the 5 tasks that
+fired in an earlier small-N pilot against the later N=100 chaos-off run: only
+2 of those 5 also fired on rerun. Always report the aggregate ASR_B + 95% CI
+across the full 100-task run, never a single task's recorded outcome.
+
+**7. Scarcity (8th framing) has no usable result.** Both attempts were
+corrupted by OpenAI credit exhaustion partway through the 100-task run (see the
+`scarcity_100_*_CORRUPTED_creditexhausted*` files) — the payload code itself is
+written and passed a single-task sanity check, it just never completed a clean
+full sweep.
+
+*Note on an earlier, superseded number:* an initial run against `gpt-4o-mini`
+(before the harness settled on `gpt-5.6-luna`, used for every result above)
+reported ASR_B=24%, but used a buggy detector that regex-matched the whole
+rendered page instead of just the parsed action — it is not comparable to any
+number in this README and is not used anywhere in the reported results.
+
 ## Setup
 
 1. **Clone and create a virtual environment:**
