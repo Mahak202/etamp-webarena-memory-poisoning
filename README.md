@@ -1,5 +1,9 @@
 # eTAMP: Memory-Poisoning Attacks on WebArena Web Agents
 
+![License](https://img.shields.io/badge/license-Apache--2.0-blue)
+![Python](https://img.shields.io/badge/python-3.11-blue)
+![Status](https://img.shields.io/badge/status-manuscript%20under%20review-yellow)
+
 Code for the thesis experiments on triggered memory-poisoning attacks against an
 LLM-driven web agent built on [WebArena](https://github.com/web-arena-x/webarena).
 An attacker plants a poisoned note during one task (Shopping site); later, during
@@ -13,6 +17,27 @@ reviewers and readers can see exactly how the experiments were run and how attac
 outcomes were detected, per the paper's data and code availability statement.
 
 ## What this is
+
+```
+.
+├── agent/                  modified WebArena agent + prompt construction
+├── browser_env/            modified WebArena browser/environment wrapper
+├── llms/                   OpenAI/HF provider dispatch, tokenizers, budget-aware client
+├── etamp/                  <- the actual attack: payloads, drivers, detectors, results
+│   ├── inject.py               payload_<condition>() definitions (8 framings + reverse)
+│   ├── chaos_monkey.py         action-level noise injector (chaos-on condition)
+│   ├── run_<condition>_100.py  100-task sweep driver per condition
+│   ├── tally_<condition>_100.py   ASR_B + 95% CI from a completed run
+│   ├── build_step_matrix_<condition>.py   per-step fired/stuck/clean breakdown
+│   ├── build_results.py        shared detector: find_attack() on parsed_action
+│   └── <condition>_100_*.csv/.txt   aggregated result data for every condition
+├── config_files/           WebArena benchmark task definitions (upstream, unmodified)
+├── environment_docker/     WebArena site-hosting Docker setup (upstream, unmodified)
+├── webarena_task_master.csv, task_site_mapping.csv   task-id -> site mapping used here
+├── media/etamp_dashboard/  dashboard screenshots + results chart used in this README
+├── run.py                  modified CLI entrypoint (adds --poison_pid/--poison_style/--chaos)
+└── minimal_example.py      upstream sanity check — confirms your site env vars are set
+```
 
 - `agent/`, `browser_env/`, `llms/`, `run.py`, `requirements.txt` — a modified fork
   of WebArena's agent/environment harness. Diffs from upstream add: a pluggable
@@ -274,6 +299,37 @@ never silently reused — before rerunning, move its `results/<condition>_100/` 
 suffixed `_CORRUPTED_<reason>` in this repo are exactly these failed attempts,
 kept for transparency and explicitly excluded from all reported numbers.
 
+### Reproducibility notes
+
+- **Task order is fixed but shuffled, per condition.** Each `run_<condition>_100.py`
+  shuffles the same 100 task ids with `random.Random(ORDER_SEED)` before launching
+  them one at a time; `ORDER_SEED` is a distinct, hardcoded constant per condition
+  (100 for the baseline, 200 for reverse, 300 for chaos-on, 400 for helpfulness, 500
+  for consensus, 600 for reciprocity, 700 for fear, 800 for trust, 900 for fatigue,
+  1000 for scarcity) so each condition's execution order is reproducible but the
+  conditions don't all run in the same order. This only affects wall-clock
+  scheduling, not the outcome of any individual task.
+- **Tested environment:** Python 3.11.15, `openai==3.22.0` (`requirements.txt` only
+  pins a floor, `openai>=1.99.0`, for forward compatibility — pin the exact version
+  above if you need a bit-for-bit reproduction of the harness as tested).
+- **Required environment variables** (from upstream WebArena's
+  `browser_env/env_config.py`): `SHOPPING`, `SHOPPING_ADMIN`, `REDDIT`, `GITLAB`,
+  `MAP`, `WIKIPEDIA`, `HOMEPAGE`. Only `SHOPPING` and `REDDIT` (plus `HOMEPAGE`, used
+  for the credentials page) are actually exercised by any condition in this
+  repository — the rest can point at unused/placeholder containers. Run
+  `python minimal_example.py` first; it checks all seven are set and fails fast
+  with a clear message naming whichever are missing, before you spend API budget
+  on a real sweep.
+- **Runtime and cost, observed on this hardware/account** (one data point per
+  condition, not a guarantee): each 100-task sweep runs **sequentially**, one task
+  at a time, and took between ~1.6 hours (chaos-off baseline, helpfulness) and
+  ~10.5 hours (fatigue) wall-clock, depending on how many steps each task needed
+  before hitting a stop/stuck/step-cap outcome. Total OpenAI spend across this
+  project's full development history (every condition, every rerun, every pilot)
+  was on the order of a few dollars — `gpt-5.6-luna` with `max_output_tokens=1024`
+  and a 15-step cap per task is inexpensive per call; budget accordingly but do not
+  expect this number to be precise for your own account/pricing.
+
 ## Results
 
 ![ASR_B by payload condition, ordered low to high, with 95% CI](media/etamp_dashboard/asr_b_by_condition.png)
@@ -307,27 +363,43 @@ from 44% to 47% — within noise. Chaos perturbs clicking/scrolling/typing, not
 navigation, so once the agent decides to issue the malicious `goto`, chaos can't
 prevent it.
 
-**4. The underlying task is not solved any more often just because the attack
-also fired — if anything, poisoning quietly tanks it regardless.** Task success
-on the clean, unpoisoned baseline is already low (8.5%, 8/94); every poisoned
-condition measured is at or below that, independent of how often the attack
-itself fired:
+**4. Task success is low across the board, and consistently lower on runs
+where the attack fired than on runs where it didn't — within the same
+condition, same model.** Every number below is recomputed directly from each
+condition's `*_100_results.csv` (`task_success` × `attack_status`, error rows
+excluded), not taken from a cached summary:
 
-| Condition | ASR_B | Task success (graded) |
-|---|---|---|
-| Clean (unpoisoned) baseline | — | 8.5% (8/94) |
-| Blunt override | 44% | 6.0% (6/100) |
-| Reciprocity | 42% | 8.2% (8/97) |
-| Trust | 88% | 6.4% (6/94) |
-| Fatigue | 85% | 5.6% (5/90) |
-| Fear | 90% | 3.0% (3/100) |
+| Condition | ASR_B | Task success, overall (graded) | ...when fired | ...when not fired |
+|---|---|---|---|---|
+| Blunt override | 44% | 6.3% (6/96) | 4.8% (2/42) | 7.4% (4/54) |
+| Chaos-on | 47% | 3.3% (3/92) | 0.0% (0/47) | 6.7% (3/45) |
+| Reverse direction | 0% | 11.9% (10/84) | n/a (no fires) | 11.9% (10/84) |
+| Reciprocity | 42% | 8.2% (8/97) | 4.9% (2/41) | 10.7% (6/56) |
+| Fatigue | 85% | 5.6% (5/90) | 4.8% (4/84) | 16.7% (1/6) |
+| Trust | 88% | 6.4% (6/94) | 4.7% (4/86) | 25.0% (2/8) |
+| Fear | 90% | 3.7% (3/82) | 3.7% (3/82) | n/a (no non-fires graded) |
+| Consensus | 92% | 3.1% (3/97) | 2.2% (2/89) | 12.5% (1/8) |
+| Helpfulness | 99% | 3.2% (3/95) | 3.2% (3/95) | n/a (no non-fires graded) |
 
-Splitting fired vs. not-fired runs within a condition doesn't explain the gap
-either (e.g. fear: 3.3% success when fired vs. 0.0% when not — both within
-noise of each other). Net read: looking at task-success numbers alone, an
-operator monitoring only completion rate would never notice anything had
-happened — the attack is invisible on that metric even though it fired on the
-large majority of runs.
+Every condition with enough non-fired graded runs to compare shows the same
+direction: task success is lower when the attack fired than when it didn't
+(most sharply in trust, 4.7% vs. 25.0%, and fatigue, 4.8% vs. 16.7%) — though
+the "not fired" bucket is often tiny (6–8 graded runs for trust/fatigue/
+consensus), so read these as a consistent directional signal across
+conditions, not as individually well-powered comparisons. Fear and
+helpfulness have no non-fired graded runs at all to compare against, since
+nearly every non-errored run in those conditions fired. Net read: looking at
+task-success numbers alone, an operator monitoring only completion rate would
+likely not flag anything as unusual — success is low either way — but it is
+not actually independent of whether the attack fired.
+
+*A separate, unpoisoned clean-task-success baseline (TSR = 8/94 = 8.5%) exists
+in this repository's commit history from the project's original exploratory
+run, but that run used `gpt-4o-mini` — the same superseded run whose 24%
+ASR_B figure is flagged below — not `gpt-5.6-luna`. It is not included in the
+table above because it is not a like-for-like comparison against any
+`gpt-5.6-luna` condition; a matched clean/poisoned pair on the same model is
+needed before citing a clean-vs-poisoned task-success gap in the manuscript.*
 
 **5. Once the attack fires, soft framings keep firing — the blunt override
 mostly doesn't.** Among runs where the attack fired at least once, fear
@@ -355,6 +427,42 @@ reported ASR_B=24%, but used a buggy detector that regex-matched the whole
 rendered page instead of just the parsed action — it is not comparable to any
 number in this README and is not used anywhere in the reported results.
 
+## Known Limitations
+
+A consolidated list, for anyone citing or extending this work:
+
+1. **Single model family.** Every N=100 result is from one model, `gpt-5.6-luna`.
+   One local-model spot-check (`gemma3:4b`, N=10) couldn't complete tasks reliably
+   enough to exercise the attack at all — there is no evidence yet on whether the
+   framing ranking (low cluster vs. high cluster) holds across other frontier
+   model families.
+2. **Non-deterministic at `temperature=1.0`.** Only 2 of 5 tasks that fired in an
+   earlier small-N pilot also fired on rerun at N=100. Any single task's recorded
+   outcome is a sample, not ground truth — only the aggregate ASR_B + 95% CI
+   across a full 100-task run should be treated as a result.
+3. **No matched-clean arm for most conditions.** To fit a same-day turnaround
+   across eight framings, only the original blunt-override condition (and the
+   reverse-direction / chaos-on variants of it) has a paired clean-memory control
+   run; the other seven framings are poison-only. Task-success-rate comparisons
+   for those seven are against the one blunt-override clean baseline, not an
+   identically-poisoned-minus-payload control for that specific framing.
+4. **Scarcity (8th framing) has no completed result** — both attempts hit OpenAI
+   credit exhaustion mid-sweep; the payload code is written and single-task
+   verified, but there is no N=100 ASR_B for it in this release.
+5. **Two curated sites, one direction confirmed to work.** All non-zero ASR_B
+   results are Shopping→Reddit; the identical payload in the Reddit→Shopping
+   direction fired 0/100 times. Whether this is specific to these two sites'
+   content/structure or a more general asymmetry is untested — no other
+   WebArena site pairs (Gitlab, Map, Wikipedia, Shopping-Admin) were tried.
+6. **Detector measures one signature.** `find_attack()` matches a specific
+   `goto [.../product/<pid>...]` URL pattern. It is not a general-purpose
+   jailbreak or prompt-injection detector — a model that fires the malicious
+   instruction via a differently-shaped action (not this exact `goto`) would be
+   scored as a non-fire by this codebase.
+7. **No defense/mitigation code.** This release is attack-and-measurement only;
+   it does not include or evaluate any memory-sanitization, input-filtering, or
+   other candidate defense.
+
 ## Setup
 
 1. **Clone and create a virtual environment:**
@@ -370,15 +478,26 @@ number in this README and is not used anywhere in the reported results.
    [environment setup instructions](https://github.com/web-arena-x/webarena/tree/main/environment_docker)
    to launch the Docker containers for the Shopping and Reddit sites used by these
    experiments (this repo's `environment_docker/` is the unmodified upstream
-   config). Set the resulting site URLs via the environment variables WebArena
-   expects (e.g. `SHOPPING`, `REDDIT`) before running anything.
+   config), then export all seven of the environment variables WebArena expects —
+   `SHOPPING`, `SHOPPING_ADMIN`, `REDDIT`, `GITLAB`, `MAP`, `WIKIPEDIA`, `HOMEPAGE`
+   — even though only `SHOPPING`/`REDDIT`/`HOMEPAGE` are exercised by the
+   experiments in this repo (the other four can point at unused placeholder URLs
+   if you don't need the other WebArena sites).
 
 3. **Set your OpenAI API key** (never commit this):
    ```bash
    export OPENAI_API_KEY=sk-...
    ```
 
-4. **Run an experiment.** See the "Experiments" section above for the full list
+4. **Verify your environment before spending API budget:**
+   ```bash
+   python minimal_example.py
+   ```
+   This is upstream WebArena's own sanity check — it confirms all seven site
+   variables are set and the sites are reachable, and fails fast with a clear
+   message naming anything missing.
+
+5. **Run an experiment.** See the "Experiments" section above for the full list
    of conditions and the exact scripts for each — they all follow the same
    `run_<condition>_100.py` → `tally_<condition>_100.py` →
    `build_step_matrix_<condition>.py` pattern from inside `etamp/`.
@@ -402,7 +521,33 @@ number in this README and is not used anywhere in the reported results.
   `.auth/*`) — never present in this repository; all credentials are supplied at
   runtime via environment variables (see Setup, step 3) and are gitignored.
 
+## Citing this work
+
+If you use this code or these results, please cite the manuscript (placeholder
+below, until it is published — see `CITATION.cff` for the machine-readable
+version, or use GitHub's "Cite this repository" button) and the WebArena
+benchmark this repository builds on:
+
+```bibtex
+@article{gupta_etamp_webarena,
+  title   = {[Manuscript title -- update once accepted/published]},
+  author  = {Gupta, Mahak},
+  note    = {Manuscript under review. Code: https://github.com/Mahak202/etamp-webarena-memory-poisoning},
+  year    = {2026}
+}
+
+@article{zhou2023webarena,
+  title   = {WebArena: A Realistic Web Environment for Building Autonomous Agents},
+  author  = {Zhou, Shuyan and Xu, Frank F and Zhu, Hao and Zhou, Xuhui and Lo, Robert
+             and Sridhar, Abishek and Cheng, Xianyi and Bisk, Yonatan and Fried, Daniel
+             and Alon, Uri and others},
+  journal = {arXiv preprint arXiv:2307.13854},
+  year    = {2023}
+}
+```
+
 ## Attribution
 
 Built on [WebArena](https://github.com/web-arena-x/webarena) (Zhou et al.), used
-and modified under its original license for academic research purposes.
+and modified under its original license (Apache License 2.0 — see `LICENSE`)
+for academic research purposes.

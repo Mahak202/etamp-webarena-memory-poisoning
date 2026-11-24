@@ -3,6 +3,7 @@ playwright==1.32.1
 Pillow
 evaluate
 openai>=1.99.0
+scipy
 types-tqdm
 tiktoken
 aiolimiter

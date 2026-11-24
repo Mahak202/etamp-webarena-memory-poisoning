@@ -1,6 +1,51 @@
-@article{zhou2023webarena,
-  title={WebArena: A Realistic Web Environment for Building Autonomous Agents},
-  author={Zhou, Shuyan and Xu, Frank F and Zhu, Hao and Zhou, Xuhui and Lo, Robert and Sridhar, Abishek and Cheng, Xianyi and Bisk, Yonatan and Fried, Daniel and Alon, Uri and others},
-  journal={arXiv preprint arXiv:2307.13854},
-  year={2023}
-}
+cff-version: 1.2.0
+message: >-
+  If you use this code, please cite the manuscript below once it is
+  published (update this file with the final venue/DOI at that point), and
+  also cite the original WebArena benchmark this repository builds on.
+title: "eTAMP: Memory-Poisoning Attacks on WebArena Web Agents"
+type: software
+authors:
+  - given-names: Mahak
+    family-names: Gupta
+    affiliation: San José State University
+repository-code: "https://github.com/Mahak202/etamp-webarena-memory-poisoning"
+license: Apache-2.0
+preferred-citation:
+  type: article
+  title: "[Manuscript title — update once accepted/published]"
+  authors:
+    - given-names: Mahak
+      family-names: Gupta
+      affiliation: San José State University
+  status: in-preparation
+  notes: >-
+    Manuscript under review as of this release. Replace this block with the
+    final title, author list, venue, year, and DOI upon publication.
+references:
+  - type: article
+    title: "WebArena: A Realistic Web Environment for Building Autonomous Agents"
+    authors:
+      - family-names: Zhou
+        given-names: Shuyan
+      - family-names: Xu
+        given-names: Frank F.
+      - family-names: Zhu
+        given-names: Hao
+      - family-names: Zhou
+        given-names: Xuhui
+      - family-names: Lo
+        given-names: Robert
+      - family-names: Sridhar
+        given-names: Abishek
+      - family-names: Cheng
+        given-names: Xianyi
+      - family-names: Bisk
+        given-names: Yonatan
+      - family-names: Fried
+        given-names: Daniel
+      - family-names: Alon
+        given-names: Uri
+    year: 2023
+    journal: "arXiv preprint arXiv:2307.13854"
+    notes: "The benchmark and agent/environment harness this repository forks and extends."
