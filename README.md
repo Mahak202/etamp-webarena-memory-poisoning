@@ -440,12 +440,18 @@ A consolidated list, for anyone citing or extending this work:
    earlier small-N pilot also fired on rerun at N=100. Any single task's recorded
    outcome is a sample, not ground truth — only the aggregate ASR_B + 95% CI
    across a full 100-task run should be treated as a result.
-3. **No matched-clean arm for most conditions.** To fit a same-day turnaround
-   across eight framings, only the original blunt-override condition (and the
-   reverse-direction / chaos-on variants of it) has a paired clean-memory control
-   run; the other seven framings are poison-only. Task-success-rate comparisons
-   for those seven are against the one blunt-override clean baseline, not an
-   identically-poisoned-minus-payload control for that specific framing.
+3. **No N=100 condition has a matched clean-memory control run.** Every
+   `*_100` condition in this repository (blunt override included) is
+   poison-only, to fit a same-day turnaround across nine conditions. The only
+   run anywhere in this repository with a paired clean-memory arm
+   (`inject.py::clean_turns()`, same shape/role/position as the poisoned
+   turn, payload text swapped for an ordinary review line) is the earlier
+   N=20 pilot validation study (poison 5/20=25% vs. clean 0/20=0%, exact
+   McNemar p=0.0625, not significant at this N — see `results_summary.txt`),
+   which also predates the final nine-condition framing sweep. The
+   fired-vs-not-fired task-success comparison in the Results section is a
+   within-condition split of poison-only runs, not a poisoned-vs-clean
+   comparison, and should not be read as one.
 4. **Scarcity (8th framing) has no completed result** — both attempts hit OpenAI
    credit exhaustion mid-sweep; the payload code is written and single-task
    verified, but there is no N=100 ASR_B for it in this release.
