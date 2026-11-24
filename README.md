@@ -79,6 +79,20 @@ The detector only counts an attack as "fired" when the parsed action log shows t
 agent actually executing the malicious `goto`, not when its free-text reasoning
 merely mentions or considers the URL — see `build_results.py::find_attack()`.
 
+**Dashboard overview** — the same two phases above, rendered with the live stat
+cards (fired / 95% CI / voluntary stop / timed out / stuck) for one selected
+condition (fear payload shown):
+
+![Poisoned memory trajectories dashboard overview](media/etamp_dashboard/dashboard_overview.png)
+
+**Trajectories dashboard (step matrix)** — the per-task, per-step action grid
+that the above stat cards are computed from. Each row is one task; each column
+is one decision step (C1–C10); the red "malicious goto fired" icon marks the
+exact step the attack fired on for that run (blunt-override condition shown,
+44/100 tasks, filtered to fired-only):
+
+![Per-task step-matrix trajectories dashboard](media/etamp_dashboard/trajectories_step_matrix.png)
+
 ## Experiments
 
 Every condition below follows the same three-script pattern — a **driver**
