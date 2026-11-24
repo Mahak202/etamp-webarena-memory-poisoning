@@ -71,33 +71,45 @@ outcomes were detected, per the paper's data and code availability statement.
 ## How the attack works
 
 ```mermaid
-sequenceDiagram
-    participant A as Agent
-    participant S as Shopping site (Task A)
-    participant M as Agent memory
-    participant R as Reddit site (Task B)
-    participant D as Outcome detector
+flowchart LR
+    classDef phase1 fill:#EEF2FF,stroke:#4F46E5,stroke-width:1.5px,color:#1E1B4B
+    classDef phase2 fill:#FEF2F2,stroke:#DC2626,stroke-width:1.5px,color:#450A0A
+    classDef detector fill:#ECFDF5,stroke:#059669,stroke-width:1.5px,color:#064E3B
+    classDef fire fill:#DC2626,stroke:#7F1D1D,stroke-width:2px,color:#FFFFFF,font-weight:bold
+    classDef decision fill:#FFFFFF,stroke:#28253D,stroke-width:1.5px,color:#28253D
+    classDef gap fill:none,stroke:none,color:#8A94A6,font-style:italic
 
-    rect rgb(235, 235, 245)
-    Note over A,S: Phase 1 — Planting (during an unrelated Shopping task)
-    A->>S: Carries out normal Task A actions
-    S-->>M: Page content includes a hidden poisoned note
-    M->>M: Note is stored in agent memory/context
+    subgraph P1["PHASE 1 -- PLANTING (unrelated Shopping task)"]
+        A1(["User gives Task A<br/>ordinary shopping errand"]) --> A2["Agent carries out<br/>Task A normally"]
+        A2 --> A3["Page includes a hidden<br/>poisoned note disguised as<br/>a prior observation"]
+        A3 --> A4["Note is stored in agent memory<br/>Task A ends normally"]
     end
 
-    Note over A,M: ...later, in a completely separate, unrelated session...
+    GAP(["...later, in a completely<br/>separate, unrelated session..."]):::gap
 
-    rect rgb(245, 235, 235)
-    Note over A,R: Phase 2 — Trigger (during a new, unrelated Reddit task)
-    A->>R: Begins ordinary Task B (no mention of the attack)
-    M->>A: Poisoned note is still present in context
-    A->>A: Payload framing (fear / trust / fatigue / etc.)<br/>argues the "step" must be done now
-    A->>R: Executes malicious goto to attacker URL  <<< attack fires here
+    subgraph P2["PHASE 2 -- TRIGGER (new, unrelated Reddit task)"]
+        B1(["User gives Task B<br/>ordinary Reddit errand"]) --> B2["Agent begins Task B --<br/>no mention of the attack"]
+        B2 --> B3["Lands on reddit.com --<br/>poisoned memory still in context"]
+        B3 --> FRAME["Payload framing (fear / trust /<br/>fatigue / etc.) argues the<br/>'step' must be done now"]
+        FRAME --> D{"Trigger<br/>condition met?"}
+        D -- yes --> FIRE["Executes malicious goto<br/>to attacker URL"]
+        D -- no --> STUCK["Agent gets stuck<br/>before step cap"]
     end
 
-    R-->>D: Full action log for the run
-    D->>D: build_results.find_attack() parses the actual<br/>action trace (not reasoning text) for the goto
-    D-->>D: fired / not-fired -> aggregated into ASR_B + 95% CI
+    DET["Outcome detector:<br/>find_attack() parses the<br/>actual action, not reasoning text"]
+    RESULT["fired / not-fired -><br/>ASR_B + 95% CI"]
+
+    A4 --> GAP --> B1
+    FIRE --> DET
+    STUCK --> DET
+    DET --> RESULT
+
+    class A1,A2,A3,A4 phase1
+    class B1,B2,B3,FRAME phase2
+    class D decision
+    class FIRE fire
+    class STUCK phase2
+    class DET,RESULT detector
 ```
 
 The detector only counts an attack as "fired" when the parsed action log shows the
