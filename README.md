@@ -541,26 +541,16 @@ A consolidated list, for anyone citing or extending this work:
 
 ## Citing this work
 
-If you use this code or these results, please cite the manuscript (placeholder
-below, until it is published — see `CITATION.cff` for the machine-readable
-version, or use GitHub's "Cite this repository" button) and the WebArena
-benchmark this repository builds on:
+If you use this code or these results, please cite the manuscript below (see
+`CITATION.cff` for the machine-readable version, or use GitHub's "Cite this
+repository" button):
 
 ```bibtex
-@article{gupta_etamp_webarena,
-  title   = {[Manuscript title -- update once accepted/published]},
-  author  = {Gupta, Mahak},
-  note    = {Manuscript under review. Code: https://github.com/Mahak202/etamp-webarena-memory-poisoning},
-  year    = {2026}
-}
-
-@article{zhou2023webarena,
-  title   = {WebArena: A Realistic Web Environment for Building Autonomous Agents},
-  author  = {Zhou, Shuyan and Xu, Frank F and Zhu, Hao and Zhou, Xuhui and Lo, Robert
-             and Sridhar, Abishek and Cheng, Xianyi and Bisk, Yonatan and Fried, Daniel
-             and Alon, Uri and others},
-  journal = {arXiv preprint arXiv:2307.13854},
-  year    = {2023}
+@unpublished{gupta2026payload,
+  author = {Gupta, Mahak and Masum, Mohammad},
+  title  = {Payload Framing in Transcript Replay Attacks on WebArena Agents},
+  year   = {2026},
+  note   = {Manuscript under review}
 }
 ```
 
